@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import curses
 import re
 import sys
 import json
@@ -57,66 +58,97 @@ def reduce_units(stringOne, stringTwo):
     return(fractionString)
 
 
-bjobs_json = subprocess.check_output(['bjobs', '-a', '-json', '-o', 'jobid stat queue kill_reason dependency exit_reason time_left %complete run_time max_mem memlimit nthreads hrusage exit_code'])
-bjobs_json = bjobs_json.decode(sys.stdout.encoding)
-bjobs_json = json.loads(bjobs_json)
+screen = curses.initscr()
+screen.nodelay(1)
 
-# parase information to display
-jobsrunning = bjobs_json['JOBS']
+# Update the buffer, adding text at different locations
+curses.start_color()
+curses.use_default_colors()
+curses.init_pair(1,-1,curses.COLOR_BLUE) # blue bg
+curses.init_pair(2,curses.COLOR_YELLOW,-1) # yellow
+curses.init_pair(3,197,-1) # Red
+curses.init_pair(4,248,-1) # Grey
+curses.init_pair(5,28,-1) # Green
+screen_refresh_it = 0
 
-pend_count = 0
-run_count = 0
-exit_count = 0
+while True:
+    screen_refresh_it = screen_refresh_it + 1
+    bjobs_json = subprocess.check_output(['bjobs', '-a', '-json', '-o', 'jobid stat queue kill_reason dependency exit_reason time_left %complete run_time max_mem memlimit nthreads hrusage exit_code'])
+    bjobs_json = bjobs_json.decode(sys.stdout.encoding)
+    bjobs_json = json.loads(bjobs_json)
 
-header = "\x1b[38;5;3m" + "JOB ID\tSTATUS\tQUEUE\t\tRAM USAGE\tTIMELIMIT"
-print(header)
-for listnb in range(1,len(bjobs_json['RECORDS'])):
-    jobid = bjobs_json['RECORDS'][listnb]['JOBID']
-    stats = bjobs_json['RECORDS'][listnb]['STAT']
-    if stats == "PEND":
-        pend_count = pend_count + 1
-        continue
-    queue = bjobs_json['RECORDS'][listnb]['QUEUE']
-    time_left = bjobs_json['RECORDS'][listnb]['TIME_LEFT']
-    completed = bjobs_json['RECORDS'][listnb]['%COMPLETE'].replace(" L","")
+    # parse information to display
+    jobsrunning = bjobs_json['JOBS']
+
+    pend_count = 0
+    run_count = 0
+    exit_count = 0
+
+    height,width = screen.getmaxyx()
+    stopHeight = int(height)-2
+
+    header = "JOB ID\tSTATUS\tQUEUE\t\tRAM USAGE\tTIMELIMIT"
+    screen.addstr(0, 0, header,curses.color_pair(2))
+
+    i = 1
+    for listnb in range(1,len(bjobs_json['RECORDS'])):
+        jobid = bjobs_json['RECORDS'][listnb]['JOBID']
+        stats = bjobs_json['RECORDS'][listnb]['STAT']
+        if stats == "PEND":
+            pend_count = pend_count + 1
+            continue
+        queue = bjobs_json['RECORDS'][listnb]['QUEUE']
+        time_left = bjobs_json['RECORDS'][listnb]['TIME_LEFT']
+        completed = bjobs_json['RECORDS'][listnb]['%COMPLETE'].replace(" L","")
 
 
-    # generate result line to display with color based on status
-    if stats == "DONE":
-        # $(tput setaf 28)
-        line_output = "\x1b[38;5;28m" + "{}\t{}\t{}".format(jobid, stats, queue)
-    elif stats == "RUN":
-        # $(tput setaf 248)
-        line_output = "\x1b[38;5;248m" + "{}\t{}\t{}".format(jobid, stats, queue)
-        run_count = run_count + 1
-    elif stats == "EXIT":
-        # $(tput setaf 197)
-        line_output = "\x1b[38;5;197m" + "{}\t{}\t{}".format(jobid, stats, queue)
-        exit_count = exit_count + 1
-    else:
         line_output = "{}\t{}\t{}".format(jobid, stats, queue)
 
 
-    # Extra columns to display if there is information
-    max_mem = bjobs_json['RECORDS'][listnb]['MAX_MEM']
-    memlimit = bjobs_json['RECORDS'][listnb]['MEMLIMIT']
-    if max_mem != "":
+        # Extra columns to display if there is information
+        max_mem = bjobs_json['RECORDS'][listnb]['MAX_MEM']
+        memlimit = bjobs_json['RECORDS'][listnb]['MEMLIMIT']
+        if max_mem != "":
             max_mem = parse_bytes_output(max_mem)
             memlimit = parse_bytes_output(memlimit)
             memusage = reduce_units(max_mem, memlimit)
             memusage = reduce_units(max_mem, memlimit)
             line_output+= "\t{}".format(memusage)
+        else:
+            line_output+= "\t\t\t"
 
 
-    exit_code = bjobs_json['RECORDS'][listnb]['EXIT_CODE']
-    if exit_code != None and exit_code != "":
         exit_reason = bjobs_json['RECORDS'][listnb]['EXIT_REASON']
-        line_output+= "\t{}\t{}".format(exit_code, exit_reason)
+        if exit_reason != None and exit_reason != "":
+            line_output+= "\t{}".format(exit_reason)
 
-    # format time_left
-    line_output+= "\t{}".format(completed)
-    line_output+= "\x1b[0m"
-    print(line_output)
+        # format time_left
+        if stats == "RUN":
+            line_output+= "\t{}".format(completed)
+
+        # generate result line to display with color based on status
+        if i < stopHeight:
+            if stats == "DONE":
+                # $(tput setaf 28)
+                screen.addstr(i, 1, line_output, curses.color_pair(5))
+            elif stats == "RUN":
+                # $(tput setaf 248)
+                screen.addstr(i, 1, line_output, curses.color_pair(4))
+                run_count = run_count + 1
+            elif stats == "EXIT":
+                # $(tput setaf 197)
+                screen.addstr(i, 1, line_output, curses.color_pair(3))
+                exit_count = exit_count + 1
+            else:
+                screen.addstr(i, 1, line_output)
+            i = i + 1
 
 
-print("{} still pending, {} running, {} exited".format(pend_count, run_count, exit_count))
+    status = "{} still pending, {} running, {} exited".format(pend_count, run_count, exit_count)
+    screen.addstr(stopHeight, 1, status)
+    screen.refresh()
+    screen.timeout(5000)
+
+    if screen.getch() == ord('q'):
+        break
+curses.endwin()
