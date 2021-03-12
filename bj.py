@@ -3,6 +3,7 @@
 
 import curses
 import re
+import os
 import sys
 import json
 import subprocess
@@ -62,14 +63,22 @@ screen = curses.initscr()
 screen.nodelay(1)
 
 # Update the buffer, adding text at different locations
+curses.curs_set(0)
+curses.noecho()
 curses.start_color()
 curses.use_default_colors()
-curses.init_pair(1,-1,curses.COLOR_BLUE) # blue bg
+screen.keypad(1)
+curses.mousemask(1)
+
+
+# curses.init_pair(1,-1,curses.COLOR_BLUE) # blue bg
+curses.init_pair(1,245,-1) # blue bg
 curses.init_pair(2,curses.COLOR_YELLOW,-1) # yellow
 curses.init_pair(3,197,-1) # Red
 curses.init_pair(4,248,-1) # Grey
 curses.init_pair(5,28,-1) # Green
 screen_refresh_it = 0
+email_scheduled = False
 
 while True:
     screen_refresh_it = screen_refresh_it + 1
@@ -87,12 +96,16 @@ while True:
     height,width = screen.getmaxyx()
     stopHeight = int(height)-2
 
+
+    # screen.addstr(0, 0, "MENU GOES HERE : {}".format(screen_refresh_it),curses.color_pair(1))
     header = "JOB ID\tSTATUS\tQUEUE\t\tRAM USAGE\tTIMELIMIT"
     screen.addstr(0, 0, header,curses.color_pair(2))
 
     i = 1
+    jobid_set = set()
     for listnb in range(1,len(bjobs_json['RECORDS'])):
         jobid = bjobs_json['RECORDS'][listnb]['JOBID']
+        jobid_set.add(jobid)
         stats = bjobs_json['RECORDS'][listnb]['STAT']
         if stats == "PEND":
             pend_count = pend_count + 1
@@ -146,9 +159,30 @@ while True:
 
     status = "{} still pending, {} running, {} exited".format(pend_count, run_count, exit_count)
     screen.addstr(stopHeight, 1, status)
+
+    if email_scheduled is True:
+        screen.addstr(stopHeight+1, 0, "Exit [q] | " ,curses.color_pair(1))
+        screen.addstr(stopHeight+1, 11, "Email Scheduled", curses.color_pair(5))
+        screen.addstr(stopHeight+1, 26, " | Killall [k]", curses.color_pair(1))
+    else:
+        screen.addstr(stopHeight+1, 0, "Exit [q] | Email [e] | Killall [k]" ,curses.color_pair(1))
+
     screen.refresh()
     screen.timeout(5000)
 
-    if screen.getch() == ord('q'):
-        break
+
+    ch = screen.getch()
+    if ch == ord('q'): break
+    if ch == curses.KEY_MOUSE:
+        _, mx, my, _, _ = curses.getmouse()
+        y, x = screen.getyx()
+        screen.addstr(0, 0, "{} : {}".format(my, mx))
+    if ch  == ord('e'):
+        email_scheduled = True
+        bwait_cmd = ') && ended('.join(jobid_set)
+        bwait_cmd = 'ended(' + bwait_cmd + ')'
+        bwait_cmd = "bwait -w '" + bwait_cmd + "'"
+        os.system("{} && printf '\n\nThis is an automated email from better-bjobs on ending of all jobs' | mail -s '[BBJ] Farm Jobs Ended' $USER@sanger.ac.uk & \n echo $! > $HOME/.better-bjobs.bgtasks.txt".format(bwait_cmd))
+
+
 curses.endwin()
