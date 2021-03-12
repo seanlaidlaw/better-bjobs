@@ -27,3 +27,15 @@ mkdir -p $HOME/.local/bin  # create bin folder in home if not exists
 curl -L https://raw.githubusercontent.com/seanlaidlaw/better-bjobs/master/bj.py --output $HOME/.local/bin/bj.py
 echo "alias bj='python $HOME/.local/bin/bj.py'" >> $HOME/.bashrc
 ```
+
+## Usage
+
+Unlike the standard bjobs command better-bjobs as an interactive terminal user interface, supports multiple options for managing all currently running jobs.
+### Enabling Email Notifications
+By pressing the 'e' key, a scheduled email will be submitted once all job ids have finished running (regardless of exit status).
+
+![interface of better-bjobs with email option](img/not_scheduled.svg)
+
+Enabling this option will turn the button green
+
+![interface of better-bjobs with activated email option](img/scheduled.svg)
