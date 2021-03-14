@@ -92,6 +92,7 @@ while True:
     pend_count = 0
     run_count = 0
     exit_count = 0
+    done_count = 0
 
     height,width = screen.getmaxyx()
     stopHeight = int(height)-2
@@ -139,19 +140,24 @@ while True:
         if stats == "RUN":
             line_output+= "\t{}".format(completed)
 
+        if stats == "DONE":
+            done_count = done_count + 1
+        elif stats == "RUN":
+            run_count = run_count + 1
+        elif stats == "EXIT":
+            exit_count = exit_count + 1
+
         # generate result line to display with color based on status
-        if i < stopHeight:
+        if i < stopHeight-1:
             if stats == "DONE":
                 # $(tput setaf 28)
                 screen.addstr(i, 1, line_output, curses.color_pair(5))
             elif stats == "RUN":
                 # $(tput setaf 248)
                 screen.addstr(i, 1, line_output, curses.color_pair(4))
-                run_count = run_count + 1
             elif stats == "EXIT":
                 # $(tput setaf 197)
                 screen.addstr(i, 1, line_output, curses.color_pair(3))
-                exit_count = exit_count + 1
             else:
                 screen.addstr(i, 1, line_output)
             i = i + 1
