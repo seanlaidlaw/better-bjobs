@@ -8,6 +8,12 @@ import sys
 import json
 import subprocess
 
+# if an argument is passed to bj then only show jobs matching that job description
+job_description_filter = False
+if len(sys.argv) > 1:
+    job_description_filter = sys.argv[1]
+
+
 # function definitions
 def parse_bytes_output(bytes_string):
     if bytes_string.endswith("bytes"):
@@ -80,9 +86,16 @@ curses.init_pair(5,28,-1) # Green
 screen_refresh_it = 0
 email_scheduled = False
 
+# filter bjobs request to only project name if passed as argument
+if job_description_filter is False:
+    bjobs_command = ['bjobs', '-a', '-json', '-o', 'jobid stat queue kill_reason dependency exit_reason time_left %complete run_time max_mem memlimit nthreads exit_code']
+else:
+    bjobs_command = ['bjobs', '-a', '-Jd', job_description_filter, '-json', '-o', 'jobid stat queue kill_reason dependency exit_reason time_left %complete run_time max_mem memlimit nthreads exit_code']
+
+
 while True:
     screen_refresh_it = screen_refresh_it + 1
-    bjobs_json = subprocess.check_output(['bjobs', '-a', '-json', '-o', 'jobid stat queue kill_reason dependency exit_reason time_left %complete run_time max_mem memlimit nthreads hrusage exit_code'])
+    bjobs_json = subprocess.check_output(bjobs_command)
     bjobs_json = bjobs_json.decode(sys.stdout.encoding)
     bjobs_json = json.loads(bjobs_json)
 
@@ -104,7 +117,7 @@ while True:
 
     i = 1
     jobid_set = set()
-    for listnb in range(1,len(bjobs_json['RECORDS'])):
+    for listnb in range(0,len(bjobs_json['RECORDS'])):
         jobid = bjobs_json['RECORDS'][listnb]['JOBID']
         jobid_set.add(jobid)
         stats = bjobs_json['RECORDS'][listnb]['STAT']
@@ -163,8 +176,11 @@ while True:
             i = i + 1
 
 
-    status = "{} still pending, {} running, {} exited".format(pend_count, run_count, exit_count)
+    status = "{} still pending, {} running, {} done, {} exited".format(pend_count, run_count, done_count, exit_count)
     screen.addstr(stopHeight, 1, status)
+    if job_description_filter != False:
+        JdstartPos = width - len(job_description_filter)
+        screen.addstr(stopHeight, JdstartPos, job_description_filter)
 
     if email_scheduled is True:
         screen.addstr(stopHeight+1, 0, "Exit [q] | " ,curses.color_pair(1))
